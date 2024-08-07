@@ -1,5 +1,5 @@
 #!/bin/bash
-#
+
 #  Copyright (c) 2024 Red Hat, Inc.
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  You may not use this file except in compliance with the License.
@@ -13,16 +13,29 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# Script to handle CLI helm installation for OCP
+# Script to handle CLI Helm installation and management of OCP resources
 #
-# Requires: oc, helm and an active login session to a cluster.
+# Requires: oc, helm, and an active login session to a cluster.
 
 set -e
 
+# Static Variables
+export NAME_SPACE=rhdh
+export CLUSTER_USERNAME=kubeadmin
+export RELEASE_NAME=backstage
+export HELM_CHART_VALUE_FILE_NAME='./testing-audit-log-and-rbac.yaml'
+export HELM_REPO_NAME=openshift-helm-charts
+export HELM_REPO_URL=https://charts.openshift.io/
+
+# Dynamic Variables
+export CLUSTER_PASSWORD=IJryK-x5A3H-mZPzR-KrbAz
+export CLUSTER_API=https://api.crc.testing:6443
+export CLUSTER_ROUTER_BASE=apps-crc.testing
+
 usage() {
     echo "
-This script simplifies and automates the installation process of Helm charts on the OpenShift Container Platform (OCP) clusters.
-It ensures that the user is logged into a cluster and attempts to detect the cluster router base, updating the Helm chart configuration accordingly.
+This script simplifies and automates the installation and management of Helm charts on the OpenShift Container Platform (OCP) clusters.
+It includes installation of required tools, Helm chart installation, and OpenShift resource management.
 
 Usage:
   $0 [OPTIONS]
@@ -31,15 +44,17 @@ Options:
   --router-base <router-base> : Manually provide the cluster router base if auto-detection fails.
   --release-name <name>       : Specify a custom release name for the Helm chart.
   --generate-name             : Generate a name for the Helm release (overrides --release-name).
-  --namespace <namespace>     : Specify the namespace for the Helm release (autodetects if not provided).
+  --namespace <namespace>     : Specify the namespace for the Helm release.
   --values <file>             : Specify your own values file for the Helm chart.
+  --install-tools             : Install required tools (oc and helm) if not already installed.
+  --uninstall                 : Uninstall the Helm chart and resources.
+  --uninstall-all             : Uninstall all resources, including Helm chart.
   --help                      : Show this help message and exit.
 
 Examples:
-  $0 --router-base example.com     # Manually specifies the router base and installs the Helm chart
-  $0 --release-name myrelease      # Installs the Helm chart with the specified release name
-  $0 --generate-name               # Generates a name for the Helm release
-  $0 --values /path/to/values.yaml # Installs the Helm chart using the specified values file
+  $0 --router-base example.com --release-name myrelease --values /path/to/values.yaml
+  $0 --install-tools
+  $0 --uninstall --uninstall-all
 "
 }
 
@@ -48,37 +63,73 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check for required commands
-if ! command_exists helm; then
-    echo "Error: 'helm' is required. Install it from https://docs.openshift.com/container-platform/4.16/applications/working_with_helm_charts/installing-helm.html to continue."
-    exit 1
-fi
-if ! command_exists oc; then
-    echo "Error: 'oc' is required. Install it from https://docs.openshift.com/container-platform/4.16/cli_reference/openshift_cli/getting-started-cli.html to continue."
-    exit 1
-fi
+# Function to install oc CLI
+install_oc() {
+    if command_exists oc; then
+        echo "oc is already installed."
+    else
+        curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz
+        tar -xf oc.tar.gz
+        mv oc /usr/local/bin/
+        rm oc.tar.gz
+        echo "oc installed successfully."
+    fi
+}
 
-# Check if required files and directories exist
-HELM_CHART_DIR="$(dirname "$0")/../charts/backstage"
-DEFAULT_VALUES_FILE="$HELM_CHART_DIR/values.yaml"
+# Function to install Helm
+install_helm() {
+    if command_exists helm; then
+        echo "Helm is already installed."
+    else
+        echo "Installing Helm 3 client"
+        curl -sL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+        echo "helm client installed successfully."
+    fi
+}
 
-if [ ! -d "$HELM_CHART_DIR" ]; then
-    echo "Error: Helm chart directory not found at $HELM_CHART_DIR"
-    exit 1
-fi
+# Function to add Helm repo
+add_helm_repo() {
+    if ! helm repo list | grep -q "^${HELM_REPO_NAME}"; then
+        helm repo add "$HELM_REPO_NAME" "$HELM_REPO_URL"
+    else
+        echo "Repository $HELM_REPO_NAME already exists - updating repository instead."
+        helm repo update
+    fi    
+}
+
+# Function to uninstall all OpenShift resources
+uninstall_all_resources() {
+    oc delete configmap app-config-rhdh --namespace=${NAME_SPACE}
+    oc delete secret rhdh-pull-secret --namespace=${NAME_SPACE}
+    oc delete secret keycloak-secrets --namespace=${NAME_SPACE}
+    oc delete secret rhdh-secrets --namespace=${NAME_SPACE}
+    oc delete configmap rbac-policy --namespace=${NAME_SPACE}
+    oc delete deployment backstage-app --namespace=${NAME_SPACE}
+    oc delete pipeline hello-world-pipeline --namespace=${NAME_SPACE}
+    oc delete pipelinerun hello-world-pipeline-run --namespace=${NAME_SPACE}
+    oc delete serviceaccount rhdh-k8s-plugin --namespace=${NAME_SPACE}
+    oc delete secret rhdh-k8s-plugin-secret --namespace=${NAME_SPACE}
+    oc delete clusterrole rhdh-k8s-plugin --namespace=${NAME_SPACE}
+    oc delete clusterrole rhdh-k8s-plugin-ocm --namespace=${NAME_SPACE}
+    oc delete clusterrolebinding rhdh-k8s-plugin
+    oc delete clusterrolebinding rhdh-k8s-plugin-ocm
+    oc delete cronjob say-hello --namespace=${NAME_SPACE}
+    oc delete job print-pi --namespace=${NAME_SPACE}
+    oc delete daemonset test-daemonset --namespace=${NAME_SPACE}
+    oc delete statefulset example-statefulset --namespace=${NAME_SPACE}
+    oc delete service example-service --namespace=${NAME_SPACE}
+}
+
+# Function to detect cluster router base
+detect_cluster_router_base() {
+    CLUSTER_ROUTER_BASE=$(oc get ingress.config.openshift.io/cluster -o=jsonpath='{.spec.domain}')
+}
 
 # Parse command-line arguments
-ROUTER_BASE=""
-RELEASE_NAME=""
-GENERATE_NAME=false
-NAMESPACE=""
-VALUES_FILE="$DEFAULT_VALUES_FILE"
-EXTRA_HELM_ARGS=""
-
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --router-base)
-            ROUTER_BASE="$2"
+            CLUSTER_ROUTER_BASE="$2"
             shift
             ;;
         --release-name)
@@ -89,72 +140,88 @@ while [[ "$#" -gt 0 ]]; do
             GENERATE_NAME=true
             ;;
         --namespace)
-            NAMESPACE="$2"
+            NAME_SPACE="$2"
             shift
             ;;
         --values)
-            VALUES_FILE="$2"
+            HELM_CHART_VALUE_FILE_NAME="$2"
             shift
+            ;;
+        --install-tools)
+            install_oc
+            install_helm
+            exit 0
+            ;;
+        --uninstall)
+            helm uninstall "$RELEASE_NAME" -n "$NAME_SPACE"
+            oc delete pvc data-redhat-developer-hub-postgresql-0 --namespace=${NAME_SPACE}
+            oc delete pvc data-backstage-postgresql-0 --namespace=${NAME_SPACE}
+            if [[ "$2" == "--all" ]]; then
+                uninstall_all_resources
+            fi
+            exit 0
             ;;
         --help)
             usage
             exit 0
             ;;
         *)
-            EXTRA_HELM_ARGS+=" $1"
+            echo "Unknown option: $1"
+            usage
+            exit 1
             ;;
     esac
     shift
 done
 
-# Function to detect cluster router base
-detect_cluster_router_base() {
-    ROUTER_BASE=$(oc get ingress.config.openshift.io/cluster -o=jsonpath='{.spec.domain}')
-}
+# Ensure required commands are available
+if ! command_exists helm || ! command_exists oc; then
+    echo "Error: Both 'helm' and 'oc' are required. Use --install-tools to install them."
+    exit 1
+fi
 
-# Detect cluster router base if not provided
-if [[ -z "$ROUTER_BASE" ]]; then
+# Detect or set the cluster router base
+if [[ -z "$CLUSTER_ROUTER_BASE" ]]; then
     detect_cluster_router_base || (echo "Error: Cluster router base could not be detected. Please provide it using the --router-base flag." && exit 1)
 fi
 
-# Detect namespace if not provided
-if [[ -z "$NAMESPACE" ]]; then
-    NAMESPACE=$(oc config view --minify --output 'jsonpath={..namespace}')
-    if [[ -z $NAMESPACE ]]; then
-        NAMESPACE="default"
-    fi
-fi
+# Create namespace and apply resources
+oc new-project "${NAME_SPACE}" || oc project "${NAME_SPACE}"
 
-# Create namespace if it doesn't exist
-if ! oc get namespace "$NAMESPACE" >/dev/null 2>&1; then
-    echo "Namespace '$NAMESPACE' does not exist. Creating it..."
-    oc create namespace "$NAMESPACE"
-fi
+# Apply resources
+PWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+echo "$PWD"
 
-# Always include the router base in Helm arguments
-EXTRA_HELM_ARGS+=" --set global.clusterRouterBase=$ROUTER_BASE"
+# Update namespace in YAML files
+sed -i "s/namespace:.*/namespace: $NAME_SPACE/g" $PWD/resources/service-account-rhdh.yaml
+sed -i "s/namespace:.*/namespace: $NAME_SPACE/g" $PWD/resources/cluster-roles/cluster-role-binding-k8s.yaml
+sed -i "s/namespace:.*/namespace: $NAME_SPACE/g" $PWD/resources/cluster-roles/cluster-role-binding-ocm.yaml
 
-# Construct Helm install or upgrade command
-if [[ $GENERATE_NAME == true ]]; then
-    HELM_CMD="helm install --generate-name"
-else
-    if [[ -z "$RELEASE_NAME" ]]; then
-        echo "Error: Either --release-name must be specified or --generate-name must be used."
-        exit 1
-    else
-        HELM_CMD="helm install $RELEASE_NAME"
-    fi
-fi
+# Apply OpenShift resources
+oc apply -f $PWD/resources/service-account-rhdh.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/auth/service-account-rhdh-secret.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/cluster-roles/cluster-role-k8s.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/cluster-roles/cluster-role-binding-k8s.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/cluster-roles/cluster-role-ocm.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/cluster-roles/cluster-role-binding-ocm.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/pipelines/hello-world-pipeline.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/pipelines/hello-world-pipeline-run.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/jobs/cron-job.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/jobs/pi-job.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/daemon-sets/daemon-set.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/deployments/backstage-test.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/stateful-sets/stateful-set.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/resources/rbac-policies.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/auth/quay-pull-secret.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/auth/secrets-rhdh-secrets.yaml --namespace=${NAME_SPACE}
+oc apply -f $PWD/auth/keycloak-secrets.yaml --namespace=${NAME_SPACE}
 
-HELM_CMD+=" $HELM_CHART_DIR --namespace $NAMESPACE --values $VALUES_FILE $EXTRA_HELM_ARGS"
+# Obtain and update Kubernetes token in secrets file
+oc get secret rhdh-k8s-plugin-secret --namespace=${NAME_SPACE} -o yaml > $PWD/auth/service-account-rhdh-token.yaml
+TOKEN=$(grep 'token:' $PWD/auth/service-account-rhdh-token.yaml | awk '{print $2}')
+sed -i "s/K8S_CLUSTER_TOKEN:.*/K8S_CLUSTER_TOKEN: $TOKEN/g" $PWD/auth/secrets-rhdh-secrets.yaml
+oc apply -f $PWD/auth/secrets-rhdh-secrets.yaml --namespace=${NAME_SPACE}
 
-# Execute Helm install or upgrade command
-echo "Executing: $HELM_CMD"
-
-if eval "$HELM_CMD"; then
-    echo "Helm installation completed successfully."
-else
-    echo "Something went wrong with Helm installation!"
-    helm list --namespace "$NAMESPACE"
-    exit 1
-fi
+# Add Helm repo and install/upgrade Helm chart
+add_helm_repo
+helm upgrade -i "$RELEASE_NAME" -n "$NAME_SPACE" -f "$HELM_CHART_VALUE_FILE_NAME" rhdh-chart/backstage
