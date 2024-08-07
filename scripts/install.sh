@@ -36,7 +36,6 @@ Options:
   --help                      : Show this help message and exit.
 
 Examples:
-  $0                               # Auto-detects router base and installs the Helm chart
   $0 --router-base example.com     # Manually specifies the router base and installs the Helm chart
   $0 --release-name myrelease      # Installs the Helm chart with the specified release name
   $0 --generate-name               # Generates a name for the Helm release
@@ -143,7 +142,7 @@ else
         echo "Error: Either --release-name must be specified or --generate-name must be used."
         exit 1
     else
-        HELM_CMD="helm upgrade -i $RELEASE_NAME"
+        HELM_CMD="helm install $RELEASE_NAME"
     fi
 fi
 
