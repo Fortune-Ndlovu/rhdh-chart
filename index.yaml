@@ -15,6 +15,54 @@ entries:
       charts.openshift.io/provider: Red Hat Developer Hub Team
       charts.openshift.io/supportURL: https://issues.redhat.com/browse/RHIDP
     apiVersion: v2
+    created: "2025-04-24T15:16:03.624655366Z"
+    dependencies:
+    - name: common
+      repository: https://charts.bitnami.com/bitnami
+      tags:
+      - bitnami-common
+      version: 2.30.0
+    - alias: upstream
+      name: backstage
+      repository: https://backstage.github.io/charts
+      version: 2.5.1
+    description: 'A Helm chart for deploying Red Hat Developer Hub.  The telemetry
+      data collection feature is enabled by default. Red Hat Developer Hub sends telemetry
+      data to Red Hat by using the `backstage-plugin-analytics-provider-segment` plugin.
+      To disable this and to learn what data is being collected, see https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.5/html-single/telemetry_data_collection/index '
+    digest: 3652a037d7614047e15301cf8367aec7d93f8265b39cc9fb7d54684024d94471
+    home: https://redhat-developer.github.io/rhdh-chart/
+    icon: https://avatars.githubusercontent.com/u/117844786
+    keywords:
+    - backstage
+    - idp
+    - janus-idp
+    kubeVersion: '>= 1.25.0-0'
+    maintainers:
+    - name: Red Hat Developer Hub Team
+      url: https://github.com/redhat-developer/rhdh-chart
+    name: backstage
+    sources:
+    - https://github.com/redhat-developer/rhdh-chart
+    - https://github.com/redhat-developer/rhdh
+    type: application
+    urls:
+    - https://github.com/Fortune-Ndlovu/rhdh-chart/releases/download/backstage-3.4.0/backstage-3.4.0.tgz
+    version: 3.4.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: support
+          url: https://issues.redhat.com/browse/RHIDP
+        - name: Chart Source
+          url: https://github.com/redhat-developer/rhdh-chart
+        - name: Default Image Source
+          url: https://github.com/janus-idp/backstage-showcase
+      charts.openshift.io/name: Backstage
+      charts.openshift.io/provider: Red Hat Developer Hub Team
+      charts.openshift.io/supportURL: https://issues.redhat.com/browse/RHIDP
+    apiVersion: v2
     created: "2025-04-16T10:17:26.857885886Z"
     dependencies:
     - name: common
@@ -3709,4 +3757,28 @@ entries:
     urls:
     - https://github.com/Fortune-Ndlovu/rhdh-chart/releases/download/orchestrator-infra-0.0.3/orchestrator-infra-0.0.3.tgz
     version: 0.0.3
-generated: "2025-04-16T10:17:27.026501944Z"
+  redhat-developer-hub-orchestrator-infra:
+  - annotations:
+      charts.openshift.io/name: Orchestrator Infrastructure for Red Hat Developer
+        Hub
+      charts.openshift.io/provider: Red Hat Developer Hub Team
+      charts.openshift.io/supportURL: https://issues.redhat.com/browse/RHIDP
+    apiVersion: v2
+    created: "2025-04-24T15:16:03.793814268Z"
+    description: 'Helm chart to deploy the Orchestrator solution''s required infrastructure
+      suite on OpenShift, including OpenShift Serverless Operator and OpenShift Serverless
+      Logic Operator, both required to configure Red Hat Developer Hub to use the
+      Orchestrator. '
+    digest: 061eb2e4692b3813c03d68179188dd3b1f1d66a23aa4d9899740b35a5eeff546
+    kubeVersion: '>= 1.25.0-0'
+    maintainers:
+    - name: Red Hat Developer Hub Team
+      url: https://github.com/redhat-developer/rhdh-chart
+    name: redhat-developer-hub-orchestrator-infra
+    sources:
+    - https://github.com/redhat-developer/rhdh-chart
+    type: application
+    urls:
+    - https://github.com/Fortune-Ndlovu/rhdh-chart/releases/download/redhat-developer-hub-orchestrator-infra-0.0.4/redhat-developer-hub-orchestrator-infra-0.0.4.tgz
+    version: 0.0.4
+generated: "2025-04-24T15:16:03.7941521Z"
