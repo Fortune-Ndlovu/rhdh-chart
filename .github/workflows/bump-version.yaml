@@ -73,25 +73,17 @@ jobs:
         if: steps.command.outputs.command-name == 'bump'
         run: go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest
 
-      - name: Generate token
-        if: steps.command.outputs.command-name == 'bump'
-        id: generate_token
-        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2
-        with:
-          app_id: ${{ vars.RHDH_GITHUB_APP_ID }}
-          private_key: ${{ secrets.RHDH_GITHUB_APP_PRIVATE_KEY }}
-
       - name: Checkout Repository
         if: steps.command.outputs.command-name == 'bump'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
-          token: ${{ steps.generate_token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout Pull Request
         if: steps.command.outputs.command-name == 'bump'
         run: gh pr checkout ${{ github.event.issue.number }}
         env:
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get version
         if: steps.command.outputs.command-name == 'bump'
@@ -139,18 +131,10 @@ jobs:
           echo "=== Chart directory contents ==="
           ls -la charts/${{ steps.command.outputs.chart-name }}/
 
-      - name: Setup Gitsign
-        if: steps.command.outputs.command-name == 'bump'
-        uses: chainguard-dev/actions/setup-gitsign@main
-
       - name: Commit pre-commit changes
         if: steps.command.outputs.command-name == 'bump'
         uses: stefanzweifel/git-auto-commit-action@778341af668090896ca464160c2def5d1d1a3eb0 # v6
         with:
           commit_message: Bump ${{ steps.command.outputs.chart-name }} version to ${{ steps.semver.outputs.new_version }}
-          commit_options: "-s"
-          commit_user_name: RHDH Bot
-          commit_user_email: 146280956+rhdh-bot@users.noreply.github.com
-          commit_author: RHDH Bot <146280956+rhdh-bot@users.noreply.github.com >
           file_pattern: "charts/${{ steps.command.outputs.chart-name }}/"
           add_options: '-A'
