@@ -1,5 +1,6 @@
 
 # UPDATE
+# UPDATE
 
 This repository now houses the only RHDH CI Helm chart after merging with the now deprecated repository: https://github.com/rhdh-bot/openshift-helm-charts/. 
 
