@@ -115,8 +115,29 @@ jobs:
 
       - name: Run pre-commit
         if: steps.command.outputs.command-name == 'bump'
+        id: pre-commit
         uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         continue-on-error: true
+
+      - name: Check pre-commit results
+        if: steps.command.outputs.command-name == 'bump'
+        run: |
+          if [ "${{ steps.pre-commit.outcome }}" = "failure" ]; then
+            echo "Pre-commit hooks made changes to files (this is expected)"
+            echo "Changes will be committed in the next step"
+          else
+            echo "Pre-commit hooks completed without making changes"
+          fi
+
+      - name: Check files changed
+        if: steps.command.outputs.command-name == 'bump'
+        run: |
+          echo "=== Git status ==="
+          git status
+          echo "=== Files changed ==="
+          git diff --name-only
+          echo "=== Chart directory contents ==="
+          ls -la charts/${{ steps.command.outputs.chart-name }}/
 
       - name: Setup Gitsign
         if: steps.command.outputs.command-name == 'bump'
@@ -131,3 +152,5 @@ jobs:
           commit_user_name: RHDH Bot
           commit_user_email: 146280956+rhdh-bot@users.noreply.github.com
           commit_author: RHDH Bot <146280956+rhdh-bot@users.noreply.github.com >
+          file_pattern: "charts/${{ steps.command.outputs.chart-name }}/"
+          add_options: '-A'
