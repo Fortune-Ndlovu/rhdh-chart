@@ -23,7 +23,11 @@ service:
   access_log: true
 llama_stack:
   use_as_library_client: true
-  library_client_config_path: /app-root/config.yaml
+  config:
+    profile: /app-root/config.yaml
+inference:
+  providers:
+    - type: sentence_transformers
 user_data_collection:
   feedback_enabled: true
   feedback_storage: '/tmp/data/feedback'
